@@ -1,7 +1,7 @@
-name: Build Custom Linux System
+name: Build Custom Linux System with QEMU
 
 on:
-  workflow_dispatch:  # 手动触发
+  workflow_dispatch:
 
 jobs:
   build-os:
@@ -13,7 +13,8 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y build-essential bison flex libssl-dev libncurses-dev
+        sudo apt-get install -y build-essential bison flex libssl-dev libncurses-dev \
+          pkg-config zlib1g-dev libglib2.0-dev libpixman-1-dev
 
     # 下载并编译Linux内核6.14
     - name: Compile Linux Kernel 6.14
@@ -39,6 +40,17 @@ jobs:
         sudo make install
         cd ..
 
+    # 下载并编译QEMU 9.2.3
+    - name: Compile QEMU 9.2.3
+      run: |
+        wget https://download.qemu.org/qemu-9.2.3.tar.xz
+        tar -xvf qemu-9.2.3.tar.xz
+        cd qemu-9.2.3
+        ./configure --target-list=x86_64-softmmu
+        make -j$(nproc)
+        sudo make install
+        cd ..
+
     # 创建磁盘映像并配置GRUB
     - name: Create Disk Image and Configure GRUB
       run: |
@@ -47,7 +59,7 @@ jobs:
         sudo mkdir /mnt/disk
         sudo mount -o loop disk.img /mnt/disk
         sudo cp -r /boot/* /mnt/disk/boot/
-        sudo cp -r /usr/local/bin/* /mnt/disk/bin/
+        sudo cp -r /usr/local/bin/* /mnt/disk/bin/  # 包含BusyBox和QEMU
         sudo grub-install --boot-directory=/mnt/disk/boot --target=i386-pc /dev/loop0
         sudo update-grub
         sudo umount /mnt/disk
@@ -55,11 +67,11 @@ jobs:
     # 打包输出结果
     - name: Package Output
       run: |
-        tar -czvf custom-linux-system.tar.gz disk.img
+        tar -czvf custom-linux-system-with-qemu.tar.gz disk.img
 
-    # 上传构建产物（修复版本问题）
+    # 上传构建产物
     - name: Upload Artifact
-      uses: actions/upload-artifact@v4  # 使用最新稳定版 v4
+      uses: actions/upload-artifact@v4
       with:
-        name: custom-linux-system
-        path: custom-linux-system.tar.gz
+        name: custom-linux-system-with-qemu
+        path: custom-linux-system-with-qemu.tar.gz
