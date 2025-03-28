@@ -1,0 +1,74 @@
+name: Build Custom Linux System
+
+on:
+  workflow_dispatch:  # 手动触发
+
+jobs:
+  build-os:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential bison flex libssl-dev libncurses-dev
+
+    # 下载并编译Linux内核6.14
+    - name: Compile Linux Kernel 6.14
+      run: |
+        wget https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-6.14.tar.xz
+        tar -xvf linux-6.14.tar.xz
+        cd linux-6.14
+        # 使用项目根目录的自定义配置
+        cp ../../linux.config .config
+        make oldconfig  # 确保配置兼容新版本
+        make -j$(nproc)  # 编译内核（并行加速）
+        sudo make modules_install install  # 安装模块和内核
+        cd ..
+
+    # 下载并编译BusyBox 1.36.1
+    - name: Compile BusyBox 1.36.1
+      run: |
+        wget https://busybox.net/downloads/busybox-1.36.1.tar.bz2
+        tar -xvf busybox-1.36.1.tar.bz2
+        cd busybox-1.36.1
+        # 使用项目根目录的自定义配置
+        cp ../../busybox.config .config
+        make oldconfig  # 确保配置兼容新版本
+        make -j$(nproc)
+        sudo make install  # 安装BusyBox到/usr/local/bin
+        cd ..
+
+    # 创建磁盘映像并配置GRUB
+    - name: Create Disk Image and Configure GRUB
+      run: |
+        # 创建1GB的磁盘映像
+        dd if=/dev/zero of=disk.img bs=1M count=1024
+        sudo mkfs.ext4 disk.img
+
+        # 挂载映像并复制文件
+        sudo mkdir /mnt/disk
+        sudo mount -o loop disk.img /mnt/disk
+        sudo cp -r /boot/* /mnt/disk/boot/  # 复制内核和initramfs
+        sudo cp -r /usr/local/bin/* /mnt/disk/bin/  # 复制BusyBox工具
+
+        # 配置GRUB
+        sudo grub-install --boot-directory=/mnt/disk/boot --target=i386-pc /dev/loop0
+        sudo update-grub
+
+        # 卸载映像
+        sudo umount /mnt/disk
+
+    # 打包输出结果
+    - name: Package Output
+      run: |
+        tar -czvf custom-linux-system.tar.gz disk.img
+
+    # 上传构建产物（可选）
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: custom-linux-system
+        path: custom-linux-system.tar.gz
