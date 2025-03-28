@@ -1,38 +1,25 @@
 name: Compile QEMU and Linux Kernel
 
-on: [push]
-
+on: [push, pull_request]
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout Repository
-      uses: actions/checkout@v4
+    - name: Checkout code
+      uses: actions/checkout@v2
 
-    - name: Install QEMU Dependencies
+    - name: Set up QEMU
       run: |
         sudo apt-get update
-        sudo apt-get install -y libglib2.0-dev libpixman-1-dev zlib1g-dev
+        sudo apt-get install -y qemu
 
-    - name: Compile Linux Kernel 6.14
+    - name: Set up Kernel Dependencies
       run: |
-        wget https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-6.14.tar.xz
-        tar -xvf linux-6.14.tar.xz
-        cd linux-6.14
-        cp ../linux.config .config
-        make oldconfig
-        make -j$(nproc)
-        sudo make modules_install install
-        cd ..
+        sudo apt-get update
+        sudo apt-get install -y libelf-dev libgelf-dev
 
-    - name: Compile QEMU 9.2.3
+    - name: Build the Kernel
       run: |
-        wget https://download.qemu.org/qemu-9.2.3.tar.xz
-        tar -xvf qemu-9.2.3.tar.xz
-        cd qemu-9.2.3
-        ./configure --target-list=x86_64-softmmu --disable-kvm --disable-vde
-        make -j$(nproc)
-        sudo make install
-        cd ..
+        make -C /path/to/linux-os
