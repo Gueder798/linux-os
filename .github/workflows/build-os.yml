@@ -1,77 +1,37 @@
-name: Build Custom Linux System with QEMU
+name: Compile QEMU and Linux Kernel
 
-on:
-  workflow_dispatch:
+on: [push]
 
 jobs:
-  build-os:
+  build:
     runs-on: ubuntu-latest
+
     steps:
-    - name: Checkout code
+    - name: Checkout Repository
       uses: actions/checkout@v4
 
-    - name: Install dependencies
+    - name: Install QEMU Dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y build-essential bison flex libssl-dev libncurses-dev \
-          pkg-config zlib1g-dev libglib2.0-dev libpixman-1-dev
+        sudo apt-get install -y libglib2.0-dev libpixman-1-dev zlib1g-dev
 
-    # 下载并编译Linux内核6.14
     - name: Compile Linux Kernel 6.14
       run: |
         wget https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-6.14.tar.xz
         tar -xvf linux-6.14.tar.xz
         cd linux-6.14
-        cp ../../linux.config .config
+        cp ../linux.config .config
         make oldconfig
         make -j$(nproc)
         sudo make modules_install install
         cd ..
 
-    # 下载并编译BusyBox 1.36.1
-    - name: Compile BusyBox 1.36.1
-      run: |
-        wget https://busybox.net/downloads/busybox-1.36.1.tar.bz2
-        tar -xvf busybox-1.36.1.tar.bz2
-        cd busybox-1.36.1
-        cp ../../busybox.config .config
-        make oldconfig
-        make -j$(nproc)
-        sudo make install
-        cd ..
-
-    # 下载并编译QEMU 9.2.3
     - name: Compile QEMU 9.2.3
       run: |
         wget https://download.qemu.org/qemu-9.2.3.tar.xz
         tar -xvf qemu-9.2.3.tar.xz
         cd qemu-9.2.3
-        ./configure --target-list=x86_64-softmmu
+        ./configure --target-list=x86_64-softmmu --disable-kvm --disable-vde
         make -j$(nproc)
         sudo make install
         cd ..
-
-    # 创建磁盘映像并配置GRUB
-    - name: Create Disk Image and Configure GRUB
-      run: |
-        dd if=/dev/zero of=disk.img bs=1M count=1024
-        sudo mkfs.ext4 disk.img
-        sudo mkdir /mnt/disk
-        sudo mount -o loop disk.img /mnt/disk
-        sudo cp -r /boot/* /mnt/disk/boot/
-        sudo cp -r /usr/local/bin/* /mnt/disk/bin/  # 包含BusyBox和QEMU
-        sudo grub-install --boot-directory=/mnt/disk/boot --target=i386-pc /dev/loop0
-        sudo update-grub
-        sudo umount /mnt/disk
-
-    # 打包输出结果
-    - name: Package Output
-      run: |
-        tar -czvf custom-linux-system-with-qemu.tar.gz disk.img
-
-    # 上传构建产物
-    - name: Upload Artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: custom-linux-system-with-qemu
-        path: custom-linux-system-with-qemu.tar.gz
